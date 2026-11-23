@@ -54,7 +54,7 @@ jobs:
           sed -i 's#^distributionUrl=.*#distributionUrl=https\\://services.gradle.org/distributions/gradle-8.0.2-all.zip#' gradle/wrapper/gradle-wrapper.properties
           printf 'sdk.dir=%s\nndk.dir=%s/ndk/23.1.7779620\n' "$ANDROID_SDK_ROOT" "$ANDROID_SDK_ROOT" > local.properties
           chmod +x gradlew
-      - name: Build debug APK
+      - name: Build debug-signed APK
         run: |
           cd "$RUNNER_TEMP/source/jsb-default/frameworks/runtime-src/proj.android-studio"
           keytool -genkeypair -v -keystore "$RUNNER_TEMP/debug.keystore" -storepass android -alias androiddebugkey -keypass android -dname 'CN=Android Debug,O=Android,C=US' -keyalg RSA -keysize 2048 -validity 10000
@@ -88,14 +88,14 @@ jobs:
       - name: Build unsigned IPA
         run: |
           PROJECT="$RUNNER_TEMP/source/jsb-default/frameworks/runtime-src/proj.ios_mac"
-          xcodebuild -project "$PROJECT/HLClient.xcodeproj" -scheme HLClient-mobile \
+          xcodebuild -workspace "$PROJECT/HLClient.xcworkspace" -scheme HLClient-mobile \
             -configuration Release -sdk iphoneos -destination 'generic/platform=iOS' \
             -archivePath "$RUNNER_TEMP/HLClient.xcarchive" \
             CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO CODE_SIGN_IDENTITY='' archive
-          APP="$RUNNER_TEMP/HLClient.xcarchive/Products/Applications/HLClient.app"
+          APP="$RUNNER_TEMP/HLClient.xcarchive/Products/Applications/HLClient-mobile.app"
           test -d "$APP"
           mkdir -p "$RUNNER_TEMP/Payload"
-          cp -R "$APP" "$RUNNER_TEMP/Payload/HLClient.app"
+          cp -R "$APP" "$RUNNER_TEMP/Payload/HLClient-mobile.app"
           cd "$RUNNER_TEMP"
           /usr/bin/zip -qry HLClient-unsigned.ipa Payload
       - uses: actions/upload-artifact@v4
