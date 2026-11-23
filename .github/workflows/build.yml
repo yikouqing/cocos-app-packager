@@ -1,0 +1,106 @@
+name: Build mobile packages
+
+on:
+  workflow_dispatch:
+    inputs:
+      platform:
+        description: Platform to build
+        type: choice
+        required: true
+        default: both
+        options:
+          - android
+          - ios
+          - both
+      package_name:
+        description: Optional application ID / bundle ID (leave blank to use project default)
+        type: string
+        required: false
+        default: ''
+
+permissions:
+  contents: read
+
+env:
+  SOURCE_TAG: source-v1
+  SOURCE_ASSET: jsb-default.zip
+
+jobs:
+  android:
+    if: inputs.platform == 'android' || inputs.platform == 'both'
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: android-actions/setup-android@v3
+      - name: Install Android SDK components
+        run: sdkmanager 'platforms;android-33' 'build-tools;34.0.0' 'ndk;23.1.7779620'
+      - name: Download and unpack Cocos project
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release download "$SOURCE_TAG" --repo "$GITHUB_REPOSITORY" --pattern "$SOURCE_ASSET" --dir "$RUNNER_TEMP"
+          mkdir "$RUNNER_TEMP/source"
+          unzip -q "$RUNNER_TEMP/$SOURCE_ASSET" -d "$RUNNER_TEMP/source"
+      - name: Configure Android project
+        env:
+          PACKAGE_NAME: ${{ inputs.package_name }}
+        run: |
+          python3 scripts/set_package.py "$RUNNER_TEMP/source/jsb-default" "${PACKAGE_NAME:-}"
+          cd "$RUNNER_TEMP/source/jsb-default/frameworks/runtime-src/proj.android-studio"
+          sed -i 's#^distributionUrl=.*#distributionUrl=https\\://services.gradle.org/distributions/gradle-8.0.2-all.zip#' gradle/wrapper/gradle-wrapper.properties
+          printf 'sdk.dir=%s\nndk.dir=%s/ndk/23.1.7779620\n' "$ANDROID_SDK_ROOT" "$ANDROID_SDK_ROOT" > local.properties
+          chmod +x gradlew
+      - name: Build debug APK
+        run: |
+          cd "$RUNNER_TEMP/source/jsb-default/frameworks/runtime-src/proj.android-studio"
+          keytool -genkeypair -v -keystore "$RUNNER_TEMP/debug.keystore" -storepass android -alias androiddebugkey -keypass android -dname 'CN=Android Debug,O=Android,C=US' -keyalg RSA -keysize 2048 -validity 10000
+          ./gradlew --no-daemon assembleRelease \
+            -PRELEASE_STORE_FILE="$RUNNER_TEMP/debug.keystore" \
+            -PRELEASE_STORE_PASSWORD=android -PRELEASE_KEY_ALIAS=androiddebugkey -PRELEASE_KEY_PASSWORD=android
+      - uses: actions/upload-artifact@v4
+        with:
+          name: android-apk
+          path: ${{ runner.temp }}/source/jsb-default/frameworks/runtime-src/proj.android-studio/app/build/outputs/apk/release/*.apk
+          if-no-files-found: error
+          retention-days: 14
+
+  ios:
+    if: inputs.platform == 'ios' || inputs.platform == 'both'
+    runs-on: macos-14
+    steps:
+      - uses: actions/checkout@v4
+      - name: Download and unpack Cocos project
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release download "$SOURCE_TAG" --repo "$GITHUB_REPOSITORY" --pattern "$SOURCE_ASSET" --dir "$RUNNER_TEMP"
+          mkdir "$RUNNER_TEMP/source"
+          unzip -q "$RUNNER_TEMP/$SOURCE_ASSET" -d "$RUNNER_TEMP/source"
+      - name: Configure iOS project
+        env:
+          PACKAGE_NAME: ${{ inputs.package_name }}
+        run: |
+          python3 scripts/set_package.py "$RUNNER_TEMP/source/jsb-default" "${PACKAGE_NAME:-}"
+      - name: Build unsigned IPA
+        run: |
+          PROJECT="$RUNNER_TEMP/source/jsb-default/frameworks/runtime-src/proj.ios_mac"
+          xcodebuild -project "$PROJECT/HLClient.xcodeproj" -scheme HLClient-mobile \
+            -configuration Release -sdk iphoneos -destination 'generic/platform=iOS' \
+            -archivePath "$RUNNER_TEMP/HLClient.xcarchive" \
+            CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO CODE_SIGN_IDENTITY='' archive
+          APP="$RUNNER_TEMP/HLClient.xcarchive/Products/Applications/HLClient.app"
+          test -d "$APP"
+          mkdir -p "$RUNNER_TEMP/Payload"
+          cp -R "$APP" "$RUNNER_TEMP/Payload/HLClient.app"
+          cd "$RUNNER_TEMP"
+          /usr/bin/zip -qry HLClient-unsigned.ipa Payload
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ios-unsigned-ipa
+          path: ${{ runner.temp }}/HLClient-unsigned.ipa
+          if-no-files-found: error
+          retention-days: 14

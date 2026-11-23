@@ -1,0 +1,14 @@
+# Build products
+*.apk
+*.ipa
+*.aab
+*.xcarchive/
+.gradle/
+local.properties
+build/
+
+# Signing credentials
+*.jks
+*.keystore
+*.p12
+*.mobileprovision
