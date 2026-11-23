@@ -70,7 +70,7 @@ jobs:
 
   ios:
     if: inputs.platform == 'ios' || inputs.platform == 'both'
-    runs-on: macos-15
+    runs-on: macos-15-intel
     steps:
       - uses: actions/checkout@v4
       - name: Download and unpack Cocos project
