@@ -85,25 +85,14 @@ jobs:
       - name: Build unsigned IPA
         run: |
           PROJECT="$RUNNER_TEMP/source/jsb-default/frameworks/runtime-src/proj.ios_mac"
-          cd "$PROJECT"
-          set -o pipefail
-          xcodebuild \
-            -workspace HLClient.xcworkspace \
-            -scheme HLClient-mobile \
-            -configuration Release \
-            -destination 'generic/platform=iOS' \
-            -derivedDataPath ./_out \
-            IPHONEOS_DEPLOYMENT_TARGET=12.0 \
-            CODE_SIGN_IDENTITY='' \
-            CODE_SIGNING_REQUIRED=NO \
-            CODE_SIGNING_ALLOWED=NO \
-            DEVELOPMENT_TEAM='' \
-            build 2>&1 | tee "$RUNNER_TEMP/ios-build.log"
-          APP="$(find ./_out -maxdepth 6 -type d -name 'HLClient-mobile.app' -print -quit)"
-          test -n "$APP"
+          xcodebuild -workspace "$PROJECT/HLClient.xcworkspace" -scheme HLClient-mobile \
+            -configuration Release -sdk iphoneos -destination 'generic/platform=iOS' \
+            -archivePath "$RUNNER_TEMP/HLClient.xcarchive" \
+            CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO CODE_SIGN_IDENTITY='' archive
+          APP="$RUNNER_TEMP/HLClient.xcarchive/Products/Applications/HLClient-mobile.app"
           test -d "$APP"
           mkdir -p "$RUNNER_TEMP/Payload"
-          cp -R "$APP" "$RUNNER_TEMP/Payload/"
+          cp -R "$APP" "$RUNNER_TEMP/Payload/HLClient-mobile.app"
           cd "$RUNNER_TEMP"
           /usr/bin/zip -qry HLClient-unsigned.ipa Payload
       - uses: actions/upload-artifact@v4
