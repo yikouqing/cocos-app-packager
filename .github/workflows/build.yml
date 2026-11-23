@@ -12,11 +12,6 @@ on:
           - android
           - ios
           - both
-      package_name:
-        description: Optional application ID / bundle ID (leave blank to use project default)
-        type: string
-        required: false
-        default: ''
 
 permissions:
   contents: read
@@ -56,10 +51,7 @@ jobs:
           mkdir "$RUNNER_TEMP/source"
           unzip -q "$RUNNER_TEMP/$SOURCE_ASSET" -d "$RUNNER_TEMP/source"
       - name: Configure Android project
-        env:
-          PACKAGE_NAME: ${{ inputs.package_name }}
         run: |
-          python3 scripts/set_package.py "$RUNNER_TEMP/source/jsb-default" "${PACKAGE_NAME:-}"
           cd "$RUNNER_TEMP/source/jsb-default/frameworks/runtime-src/proj.android-studio"
           sed -i 's#^distributionUrl=.*#distributionUrl=https\\://services.gradle.org/distributions/gradle-8.0.2-all.zip#' gradle/wrapper/gradle-wrapper.properties
           printf 'sdk.dir=%s\nndk.dir=%s/ndk/23.1.7779620\n' "$ANDROID_SDK_ROOT" "$ANDROID_SDK_ROOT" > local.properties
@@ -90,11 +82,6 @@ jobs:
           gh release download "$SOURCE_TAG" --repo "$GITHUB_REPOSITORY" --pattern "$SOURCE_ASSET" --dir "$RUNNER_TEMP"
           mkdir "$RUNNER_TEMP/source"
           unzip -q "$RUNNER_TEMP/$SOURCE_ASSET" -d "$RUNNER_TEMP/source"
-      - name: Configure iOS project
-        env:
-          PACKAGE_NAME: ${{ inputs.package_name }}
-        run: |
-          python3 scripts/set_package.py "$RUNNER_TEMP/source/jsb-default" "${PACKAGE_NAME:-}"
       - name: Build unsigned IPA
         run: |
           PROJECT="$RUNNER_TEMP/source/jsb-default/frameworks/runtime-src/proj.ios_mac"
